@@ -13,36 +13,63 @@ st.set_page_config(page_title="CV-Builder Pro", page_icon="🎯", layout="wide")
 st.markdown("""
 <style>
     .stApp { background-color: #1a1c24; color: #e0e0e0; }
-    h1 { text-align: center; color: #ffffff !important; border-bottom: 2px solid #4a90e2; padding-bottom: 10px; }
+    h1 { text-align: center; color: #ffffff !important; border-bottom: 2px solid #4a90e2; padding-bottom: 15px; font-weight: 800; }
+    
+    /* CV-Blocks Layout */
     .cv-block {
         background-color: #2d303d;
-        padding: 20px;
+        padding: 25px;
         border-radius: 12px;
         border-left: 5px solid #4a90e2;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        margin-bottom: 25px;
+        box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4);
     }
+    
     .cv-section-title {
-        font-size: 1.4em;
+        font-size: 1.5em;
         font-weight: bold;
         color: #4a90e2;
-        margin-bottom: 15px;
+        margin-bottom: 20px;
         border-bottom: 1px solid #4a4d5e;
-        padding-bottom: 5px;
+        padding-bottom: 8px;
         text-transform: uppercase;
     }
+    
     .cv-text {
         font-family: 'Georgia', serif;
-        line-height: 1.7;
+        line-height: 1.8;
         white-space: pre-wrap;
         color: #f0f0f0;
     }
+
+    /* Styling af de individuelle erfaringer/uddannelser */
+    .entry-container {
+        margin-bottom: 25px;
+        border-bottom: 1px dashed #4a4d5e;
+        padding-bottom: 15px;
+    }
+    
+    .entry-container:last-child {
+        border-bottom: none;
+    }
+
+    .entry-headline {
+        background-color: #262936;
+        padding: 10px 15px;
+        border-radius: 6px;
+        border: 1px solid #3a3d4d;
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-bottom: 10px;
+    }
+
     .analyse-block {
         background-color: #262936;
-        padding: 25px;
+        padding: 30px;
         border-radius: 12px;
         border: 1px solid #4a90e2;
-        margin-bottom: 30px;
+        margin-bottom: 35px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -83,6 +110,25 @@ def fill_cv_docx(template, data_dict):
         return buf
     except: return None
 
+def style_cv_entries(raw_text):
+    """Opdeler rå tekst fra AI i flotte visuelle kasser."""
+    if not raw_text: return ""
+    formatted_html = ""
+    entries = raw_text.strip().split('\n\n')
+    for entry in entries:
+        parts = entry.strip().split('\n', 1)
+        if len(parts) == 2:
+            headline = parts[0].strip().replace("[", "").replace("]", "")
+            content = parts[1].strip()
+            formatted_html += f"""
+            <div class='entry-container'>
+                <div class='entry-headline'>{headline}</div>
+                <div class='cv-text'>{content}</div>
+            </div>"""
+        else:
+            formatted_html += f"<div class='entry-container'><div class='cv-text'>{entry}</div></div>"
+    return formatted_html
+
 # --- APP FLOW ---
 st.markdown("<h1>🎯 CV-Builder Pro & Match Analyst</h1>", unsafe_allow_html=True)
 
@@ -102,7 +148,7 @@ if st.session_state.cv_step == 1:
             st.session_state.temp_job_text = get_text_from_url(job_url)
         job_text = st.text_area("Jobbeskrivelse:", value=st.session_state.get('temp_job_text', ""), height=250)
 
-    if st.button("Start Match-Analyse & Skriv CV ✨", type="primary"):
+    if st.button("Start Match-Analyse & Skriv CV ✨", type="primary", use_container_width=True):
         if master_cv and job_text:
             st.session_state.master_cv_text = extract_pdf(master_cv)
             st.session_state.job_content = job_text
@@ -112,17 +158,17 @@ if st.session_state.cv_step == 1:
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI strukturerer dine afsnit i første person..."):
+    with st.spinner("AI skriver dit CV i jeg-form og strukturerer afsnit..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
             Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et i BRØDTEKST.
             
             VIGTIGE KRAV:
-            1. SPROG: Skriv i 1. person (brug "Jeg", "Min", "Mit"). Omtal ALDRIG kandidaten i 3. person.
+            1. SPROG: Skriv i 1. person ("Jeg", "Mit", "Min").
             2. AFSNIT: Hvert job, hver uddannelse og hvert kursus SKAL præsenteres som et separat afsnit.
             3. STRUKTUR: Hvert afsnit skal starte med en linje med [TITEL | STED | PERIODE] efterfulgt af et linjeskift og derefter selve brødteksten.
-            4. INDHOLD: Beskriv ansvar og resultater flydende i brødteksten uden brug af bullets.
+            4. INDHOLD: Beskriv ansvar og resultater flydende. Adskil de individuelle poster med dobbelte linjeskift.
 
             SVAR KUN I JSON FORMAT:
             - 'analyse': {{ 'score': int, 'vurdering': str, 'sandsynlighed': str }}
@@ -161,12 +207,12 @@ elif st.session_state.cv_step == 2:
             col_l, col_r = st.columns([2, 1], gap="medium")
             with col_l:
                 st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil</div><div class='cv-text'>{res.get('profil')}</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring</div><div class='cv-text'>{res.get('erfaring')}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring</div>{style_cv_entries(res.get('erfaring'))}</div>", unsafe_allow_html=True)
             with col_r:
                 st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kompetencer</div><div class='cv-text'>{res.get('kompetencer')}</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div><div class='cv-text'>{res.get('uddannelse')}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>{style_cv_entries(res.get('uddannelse'))}</div>", unsafe_allow_html=True)
                 if res.get('kurser'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kurser</div><div class='cv-text'>{res.get('kurser')}</div></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kurser</div>{style_cv_entries(res.get('kurser'))}</div>", unsafe_allow_html=True)
 
             # --- DOWNLOAD ---
             if st.session_state.cv_template:
@@ -186,5 +232,6 @@ elif st.session_state.cv_step == 2:
             st.error(f"Fejl: {e}")
 
     if st.button("Start forfra 🔄"):
+        for key in list(st.session_state.keys()): del st.session_state[key]
         st.session_state.cv_step = 1
         st.rerun()
