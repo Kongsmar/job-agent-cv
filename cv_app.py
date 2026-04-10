@@ -13,9 +13,35 @@ st.set_page_config(page_title="Strategisk CV-Builder Pro", page_icon="🎓", lay
 
 st.markdown("""
 <style>
+    /* Global Styling */
     .stApp { background-color: #1a1c24; color: #e0e0e0; }
     h1 { text-align: center; color: #ffffff !important; border-bottom: 2px solid #4a90e2; padding-bottom: 15px; font-weight: 800; }
     
+    /* Analyse visning */
+    .analyse-block {
+        background-color: #262936;
+        padding: 25px;
+        border-radius: 12px;
+        border: 2px solid #4a90e2;
+        margin-bottom: 30px;
+    }
+
+    .score-container {
+        background-color: #0e1117;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        border: 1px solid #4a90e2;
+    }
+    
+    .score-number {
+        font-size: 2.8em;
+        font-weight: 800;
+        color: #4a90e2;
+        display: block;
+    }
+
+    /* CV Sektioner - De mørke bokse */
     .cv-block {
         background-color: #2d303d;
         padding: 25px;
@@ -134,9 +160,9 @@ if st.session_state.cv_step == 1:
         cv_template = st.file_uploader("Upload din Word-skabelon (DOCX)", type="docx")
         navn = st.text_input("Dit fulde navn:")
         
-        # NY BOKS: Særlige tilføjelser / Fokuspunkter
-        user_notes = st.text_area("Særlige fokuspunkter (AI vil lægge ekstra vægt på dette):", 
-                                 placeholder="F.eks.: Læg vægt på projektledelse, fremhæv mine tyskkundskaber, eller gør opmærksom på min erfaring med Python...")
+        # BOKS TIL TILFØJELSER / FOKUSPUNKTER
+        user_notes = st.text_area("Særlige fokuspunkter eller tilføjelser (AI lægger ekstra vægt her):", 
+                                 placeholder="F.eks.: Fremhæv min erfaring med AI, eller tilføj at jeg taler flydende spansk...")
         
     with col2:
         st.subheader("2. Jobmålet")
@@ -151,23 +177,23 @@ if st.session_state.cv_step == 1:
             st.session_state.job_content = job_text
             st.session_state.cv_template = cv_template
             st.session_state.user_name = navn
-            st.session_state.user_notes = user_notes # Gemmer brugerens noter
+            st.session_state.user_notes = user_notes
             st.session_state.cv_step = 2
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI vægter dine specifikke ønsker og optimerer indholdet..."):
+    with st.spinner("AI foretager analyse og vægter substans..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
             Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et efter disse regler:
             
-            1. SÆRLIG VÆGTNING (VIGTIGT): Brugeren har anmodet om følgende fokus: "{st.session_state.user_notes}". Integrer dette som højeste prioritet i profilteksten og de relevante erfaringer.
-            2. BEHOLD DISKRETE POSTER: Hver ansættelse skal forblive sin egen unikke boks.
-            3. FORMAT: Hver post skal starte med [STILLING | VIRKSOMHED | PERIODE].
-            4. BROBYGNING: Beskriv substans og kobl det direkte til jobopslagets behov.
-            5. TERMINOLOGI: "Erfaring" er kun erhverv. Uddannelse er "faglig baggrund".
-
+            1. SÆRLIG VÆGTNING: Brugeren ønsker fokus på: "{st.session_state.user_notes}". Dette SKAL prioriteres.
+            2. VÆGTNING AF SUBSTANS: Giv de mest relevante erhvervserfaringer mere dybde og plads.
+            3. BEHOLD DISKRETE POSTER: Hver erfaring skal starte med [TITEL | STED | PERIODE].
+            4. TERMINOLOGI: Brug KUN ordet "erfaring" om erhvervserfaring. Uddannelse er "faglig baggrund".
+            5. BROBYGNING: Forklar hvordan erfaringerne løser det nye jobs behov.
+            
             SVAR KUN I JSON FORMAT:
             {{
               "analyse": {{ "score": int, "vurdering": str }},
@@ -179,8 +205,20 @@ elif st.session_state.cv_step == 2:
             
             resp = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
             res = json.loads(resp.choices[0].message.content)
-            
-            # --- VISNING ---
+            ana = res.get('analyse', {})
+
+            # --- ANALYSE VISNING ---
+            st.markdown("<div class='analyse-block'>", unsafe_allow_html=True)
+            col_score, col_details = st.columns([1, 2])
+            with col_score:
+                st.markdown(f"<div class='score-container'><span class='score-number'>{ana.get('score')}%</span>Match</div>", unsafe_allow_html=True)
+            with col_details:
+                st.markdown(f"### Strategisk Vurdering")
+                st.write(f"{ana.get('vurdering')}")
+                st.progress(ana.get('score', 0) / 100)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # --- CV VISNING ---
             st.markdown(f"<div class='cv-block' style='text-align:center;'><h1>{st.session_state.user_name}</h1>{res.get('kontakt', '')}</div>", unsafe_allow_html=True)
             
             col_l, col_r = st.columns([2, 1], gap="medium")
@@ -201,6 +239,7 @@ elif st.session_state.cv_step == 2:
                     st.markdown("<div class='cv-section-title'>Kurser</div>", unsafe_allow_html=True)
                     st.markdown(style_cv_entries(res.get('kurser')), unsafe_allow_html=True)
 
+            # --- DOWNLOAD ---
             if st.session_state.cv_template:
                 replacements = {
                     "{{NAVN}}": st.session_state.user_name,
@@ -209,12 +248,10 @@ elif st.session_state.cv_step == 2:
                     "{{CV_ERFARING}}": res.get('erfaring', ''),
                     "{{CV_UDDANNELSE}}": res.get('uddannelse', ''),
                     "{{CV_KURSER}}": res.get('kurser', ''),
-                    "{{CV_SPROG}}": res.get('sprog', ''),
-                    "{{CV_KOMPETENCER}}": res.get('kompetencer', ''),
-                    "{{CV_FRITID}}": res.get('fritid', '')
+                    "{{CV_KOMPETENCER}}": res.get('kompetencer', '')
                 }
                 final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Download målrettet CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+                st.download_button("Download CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
 
         except Exception as e:
             st.error(f"Fejl: {e}")
