@@ -16,7 +16,6 @@ st.markdown("""
     .stApp { background-color: #1a1c24; color: #e0e0e0; }
     h1 { text-align: center; color: #ffffff !important; border-bottom: 2px solid #4a90e2; padding-bottom: 15px; font-weight: 800; }
     
-    /* CV Sektioner */
     .cv-block {
         background-color: #2d303d;
         padding: 25px;
@@ -53,7 +52,6 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
-    /* Analyse visning */
     .analyse-block {
         background-color: #262936;
         padding: 25px;
@@ -98,7 +96,6 @@ def extract_pdf(file):
 
 def format_text_for_word(text):
     if not text or len(str(text).strip()) < 2: return ""
-    # Gør [OVERSKRIFT] pænere i Word
     formatted = re.sub(r'\[(.*?)\]', r'\n\n\1\n', str(text))
     return formatted.strip()
 
@@ -107,18 +104,15 @@ def fill_cv_docx(template, data_dict):
         template.seek(0)
         doc = Document(template)
         clean_data = {k: format_text_for_word(v) for k, v in data_dict.items()}
-        
         for p in doc.paragraphs:
             for key, value in clean_data.items():
                 if key in p.text: p.text = p.text.replace(key, value)
-        
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for p in cell.paragraphs:
                         for key, value in clean_data.items():
                             if key in p.text: p.text = p.text.replace(key, value)
-        
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
@@ -149,7 +143,7 @@ def style_cv_entries(raw_text):
     return formatted_html
 
 # --- APP FLOW ---
-st.markdown("<h1>🎓 Strategisk & Akademisk CV-Builder</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🎓 Strategisk CV-Builder (Præcis terminologi)</h1>", unsafe_allow_html=True)
 
 if 'cv_step' not in st.session_state: st.session_state.cv_step = 1
 
@@ -167,7 +161,7 @@ if st.session_state.cv_step == 1:
             st.session_state.temp_job_text = get_text_from_url(job_url)
         job_text = st.text_area("Indsæt jobbeskrivelsen her:", value=st.session_state.get('temp_job_text', ""), height=250)
 
-    if st.button("Generér strategisk CV ✨", type="primary", use_container_width=True):
+    if st.button("Generér præcist CV ✨", type="primary", use_container_width=True):
         if master_cv and job_text:
             st.session_state.master_cv_text = extract_pdf(master_cv)
             st.session_state.job_content = job_text
@@ -175,23 +169,20 @@ if st.session_state.cv_step == 1:
             st.session_state.user_name = navn
             st.session_state.cv_step = 2
             st.rerun()
-        else:
-            st.warning("Husk at uploade dit Master-CV og indsætte en jobtekst.")
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI optimerer dit indhold efter strategiske og akademiske principper..."):
+    with st.spinner("AI sikrer præcis adskillelse af erfaring og uddannelse..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
-            Du er en elite-rekrutteringskonsulent. Omskriv Master-CV'et baseret på disse regler:
+            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et efter disse strenge regler:
             
-            1. RELEVANS: Fjern alt irrelevant. Spejl virksomhedens tone og ordvalg fra jobopslaget.
-            2. RESULTATER: Brug formlen: "Jeg har opnået [reelt resultat] ved at anvende [kompetence]".
-            3. SANDFÆRDIGHED: Du må IKKE opfinde tal, resultater eller procenter, der ikke findes i Master-CV'et.
-            4. AKADEMISK FOKUS: Fremhæv relevante fag, metoder og specialiseringer. Gør viden anvendelig.
-            5. PROFILTEKST: 5-8 linjer øverst (elevatortale). Skal være 100% faglig og målrettet.
-            6. STRUKTUR: Omvendt kronologisk. Hver post starter med [TITEL | VIRKSOMHED | PERIODE].
-            7. TOMME SEKTIONER: Hvis en sektion (f.eks. 'kurser' eller 'fritid') ikke findes i Master-CV'et, returner "".
+            1. TERMINOLOGI OM ERFARING: "Erfaring" må KUN bruges om indhold fra erhvervserfaring-sektionen. 
+            2. TERMINOLOGI OM UDDANNELSE: Viden fra uddannelse må ALDRIG kaldes "erfaring". Brug i stedet ord som "faglig indsigt", "teoretisk fundament", "specialiseret viden" eller "akademisk baggrund".
+            3. PROFILTEKST: Skriv en elevatortale på 5-8 linjer. Vær ekstremt præcis: Hvis brugeren har erhvervserfaring, fremhæv denne som 'erfaring'. Hvis brugeren kun har lært om et emne på studiet, skal det beskrives som 'faglig kompetence' eller 'viden'.
+            4. RELEVANS: Slet alt irrelevant. Spejl virksomhedens nøgleord.
+            5. RESULTATER: Brug formlen: "Jeg har opnået [reelt resultat] ved at anvende [kompetence]". Digt ALDRIG tal eller resultater.
+            6. STRUKTUR: Omvendt kronologisk. Hver post starter med [TITEL | VIRKSOMHED/STED | PERIODE].
 
             SVAR KUN I JSON FORMAT:
             {{
@@ -245,7 +236,7 @@ elif st.session_state.cv_step == 2:
                     st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Sprog</div><div class='cv-text'>{res.get('sprog')}</div></div>", unsafe_allow_html=True)
                 
                 if res.get('fritid'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Personligt / Fritid</div><div class='cv-text'>{res.get('fritid')}</div></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Personligt</div><div class='cv-text'>{res.get('fritid')}</div></div>", unsafe_allow_html=True)
 
             # --- DOWNLOAD ---
             if st.session_state.cv_template:
@@ -261,7 +252,7 @@ elif st.session_state.cv_step == 2:
                     "{{CV_FRITID}}": res.get('fritid', '')
                 }
                 final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Download målrettet CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+                st.download_button("Download præcist CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
 
         except Exception as e:
             st.error(f"Der skete en fejl: {e}")
