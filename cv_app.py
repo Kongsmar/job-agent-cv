@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from docx import Document
 from PyPDF2 import PdfReader
 import json
+import re
 
 # --- KONFIGURATION & DESIGN ---
 st.set_page_config(page_title="CV-Builder Pro", page_icon="🎯", layout="wide")
@@ -15,7 +16,6 @@ st.markdown("""
     .stApp { background-color: #1a1c24; color: #e0e0e0; }
     h1 { text-align: center; color: #ffffff !important; border-bottom: 2px solid #4a90e2; padding-bottom: 15px; font-weight: 800; }
     
-    /* CV-Blocks Layout */
     .cv-block {
         background-color: #2d303d;
         padding: 25px;
@@ -42,7 +42,6 @@ st.markdown("""
         color: #f0f0f0;
     }
 
-    /* Styling af de individuelle erfaringer/uddannelser */
     .entry-container {
         margin-bottom: 25px;
         border-bottom: 1px dashed #4a4d5e;
@@ -68,8 +67,30 @@ st.markdown("""
         background-color: #262936;
         padding: 30px;
         border-radius: 12px;
-        border: 1px solid #4a90e2;
+        border: 2px solid #4a90e2;
         margin-bottom: 35px;
+    }
+
+    .score-container {
+        background-color: #0e1117;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        border: 1px solid #4a90e2;
+    }
+    
+    .score-number {
+        font-size: 3em;
+        font-weight: 800;
+        color: #4a90e2;
+        display: block;
+    }
+    
+    .score-label {
+        font-size: 1em;
+        color: #ffffff;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -111,22 +132,28 @@ def fill_cv_docx(template, data_dict):
     except: return None
 
 def style_cv_entries(raw_text):
-    """Opdeler rå tekst fra AI i flotte visuelle kasser."""
+    """Opdeler teksten i felter baseret på [OVERSKRIFT]-mønsteret."""
     if not raw_text: return ""
+    pattern = r'(\[.*?\])'
+    segments = re.split(pattern, raw_text)
     formatted_html = ""
-    entries = raw_text.strip().split('\n\n')
-    for entry in entries:
-        parts = entry.strip().split('\n', 1)
-        if len(parts) == 2:
-            headline = parts[0].strip().replace("[", "").replace("]", "")
-            content = parts[1].strip()
-            formatted_html += f"""
-            <div class='entry-container'>
-                <div class='entry-headline'>{headline}</div>
-                <div class='cv-text'>{content}</div>
-            </div>"""
+    current_headline = None
+    
+    for segment in segments:
+        segment = segment.strip()
+        if not segment: continue
+        if segment.startswith('[') and segment.endswith(']'):
+            current_headline = segment.replace('[', '').replace(']', '')
         else:
-            formatted_html += f"<div class='entry-container'><div class='cv-text'>{entry}</div></div>"
+            if current_headline:
+                formatted_html += f"""
+                <div class='entry-container'>
+                    <div class='entry-headline'>{current_headline}</div>
+                    <div class='cv-text'>{segment}</div>
+                </div>"""
+                current_headline = None
+            else:
+                formatted_html += f"<div class='entry-container'><div class='cv-text'>{segment}</div></div>"
     return formatted_html
 
 # --- APP FLOW ---
@@ -158,26 +185,28 @@ if st.session_state.cv_step == 1:
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI skriver dit CV i jeg-form og strukturerer afsnit..."):
+    with st.spinner("AI målretter dit CV og fletter dine resultater ind..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
-            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et i BRØDTEKST.
+            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et så det matcher jobopslaget 100%.
             
             VIGTIGE KRAV:
-            1. SPROG: Skriv i 1. person ("Jeg", "Mit", "Min").
-            2. AFSNIT: Hvert job, hver uddannelse og hvert kursus SKAL præsenteres som et separat afsnit.
-            3. STRUKTUR: Hvert afsnit skal starte med en linje med [TITEL | STED | PERIODE] efterfulgt af et linjeskift og derefter selve brødteksten.
-            4. INDHOLD: Beskriv ansvar og resultater flydende. Adskil de individuelle poster med dobbelte linjeskift.
+            1. SPROG: Skriv i 1. person ("Jeg", "Mit").
+            2. MÅLRETNING: Analyser jobopslaget og brug de samme nøgleord og kompetencer i din tekst.
+            3. RESULTATER: I erhvervserfaringen SKAL du beskrive hvad jeg har opnået af konkrete resultater i mine tidligere roller.
+            4. STRUKTUR: HVER post (job, uddannelse, kursus) SKAL starte med en linje i klammer: [TITEL | STED | PERIODE].
+            5. BESKRIVELSE: Under hver klamme skriver du brødtekst uden bullets.
 
             SVAR KUN I JSON FORMAT:
             - 'analyse': {{ 'score': int, 'vurdering': str, 'sandsynlighed': str }}
             - 'kontakt': str
             - 'profil': str
-            - 'erfaring': str (Individuelle jobs adskilt af dobbelte linjeskift)
-            - 'uddannelse': str (Individuelle uddannelser adskilt af dobbelte linjeskift)
-            - 'kurser': str (Individuelle kurser adskilt af dobbelte linjeskift)
-            - 'kompetencer': str (10 vigtigste ord)
+            - 'erfaring': str
+            - 'uddannelse': str
+            - 'kurser': str
+            - 'sprog': str
+            - 'kompetencer': str
 
             DATA:
             JOB: {st.session_state.job_content} | CV: {st.session_state.master_cv_text}
@@ -193,26 +222,29 @@ elif st.session_state.cv_step == 2:
 
             # --- ANALYSE ---
             st.markdown("<div class='analyse-block'>", unsafe_allow_html=True)
-            st.subheader("🎯 Strategisk Match-Analyse")
-            ca, cb, cc = st.columns([1, 1, 2])
-            ca.metric("Match Score", f"{ana.get('score')}%")
-            cb.write(f"**Sandsynlighed:**\n{ana.get('sandsynlighed')}")
-            cc.progress(ana.get('score', 0) / 100)
-            st.write(f"**Vurdering:** {ana.get('vurdering')}")
+            col_score, col_details = st.columns([1, 2])
+            with col_score:
+                st.markdown(f"<div class='score-container'><span class='score-label'>Match Score</span><span class='score-number'>{ana.get('score')}%</span></div>", unsafe_allow_html=True)
+            with col_details:
+                st.markdown(f"### Strategisk Match-Analyse")
+                st.write(f"**Chancer:** {ana.get('sandsynlighed')}")
+                st.write(f"**AI Vurdering:** {ana.get('vurdering')}")
+                st.progress(ana.get('score', 0) / 100)
             st.markdown("</div>", unsafe_allow_html=True)
 
             # --- FORHÅNDSVISNING ---
-            st.markdown(f"<div class='cv-block' style='text-align:center;'><h1>{st.session_state.user_name}</h1>{res.get('kontakt')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='cv-block' style='text-align:center;'><h1>{st.session_state.user_name}</h1>{res.get('kontakt', '')}</div>", unsafe_allow_html=True)
             
             col_l, col_r = st.columns([2, 1], gap="medium")
             with col_l:
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil</div><div class='cv-text'>{res.get('profil')}</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring</div>{style_cv_entries(res.get('erfaring'))}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil</div><div class='cv-text'>{res.get('profil', '')}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring</div>{style_cv_entries(res.get('erfaring', ''))}</div>", unsafe_allow_html=True)
             with col_r:
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kompetencer</div><div class='cv-text'>{res.get('kompetencer')}</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>{style_cv_entries(res.get('uddannelse'))}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kompetencer</div><div class='cv-text'>{res.get('kompetencer', '')}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>{style_cv_entries(res.get('uddannelse', ''))}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Sprog</div>{style_cv_entries(res.get('sprog', ''))}</div>", unsafe_allow_html=True)
                 if res.get('kurser'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kurser</div>{style_cv_entries(res.get('kurser'))}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kurser</div>{style_cv_entries(res.get('kurser', ''))}</div>", unsafe_allow_html=True)
 
             # --- DOWNLOAD ---
             if st.session_state.cv_template:
@@ -223,6 +255,7 @@ elif st.session_state.cv_step == 2:
                     "{{CV_ERFARING}}": res.get('erfaring', ''),
                     "{{CV_UDDANNELSE}}": res.get('uddannelse', ''),
                     "{{CV_KURSER}}": res.get('kurser', ''),
+                    "{{CV_SPROG}}": res.get('sprog', ''),
                     "{{CV_KOMPETENCER}}": res.get('kompetencer', '')
                 }
                 final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
