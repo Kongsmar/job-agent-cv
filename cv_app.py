@@ -18,65 +18,30 @@ st.markdown("""
     
     .cv-block {
         background-color: #2d303d;
-        padding: 25px;
+        padding: 20px;
         border-radius: 12px;
         border-left: 5px solid #4a90e2;
-        margin-bottom: 25px;
-        box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4);
-    }
-    
-    .cv-section-title {
-        font-size: 1.5em;
-        font-weight: bold;
-        color: #4a90e2;
         margin-bottom: 20px;
-        border-bottom: 1px solid #4a4d5e;
-        padding-bottom: 8px;
-        text-transform: uppercase;
     }
     
-    .cv-text {
-        font-family: 'Georgia', serif;
-        line-height: 1.8;
-        white-space: pre-wrap;
-        color: #f0f0f0;
-    }
-
-    .entry-container {
-        margin-bottom: 25px;
-        border-bottom: 1px dashed #4a4d5e;
-        padding-bottom: 15px;
-    }
-    
-    .entry-headline {
-        background-color: #262936;
-        padding: 10px 15px;
-        border-radius: 6px;
-        border: 1px solid #3a3d4d;
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 1.1em;
-        margin-bottom: 10px;
-    }
-
     .analyse-block {
         background-color: #262936;
-        padding: 30px;
+        padding: 25px;
         border-radius: 12px;
         border: 2px solid #4a90e2;
-        margin-bottom: 35px;
+        margin-bottom: 30px;
     }
 
     .score-container {
         background-color: #0e1117;
-        padding: 20px;
+        padding: 15px;
         border-radius: 10px;
         text-align: center;
         border: 1px solid #4a90e2;
     }
     
     .score-number {
-        font-size: 3em;
+        font-size: 2.5em;
         font-weight: 800;
         color: #4a90e2;
         display: block;
@@ -102,10 +67,7 @@ def extract_pdf(file):
     except: return ""
 
 def format_text_for_word(text):
-    """Sørger for at fjerne klammer og indsætte dobbelt linjeskift før nye overskrifter i Word."""
     if not text: return ""
-    # Find alle [OVERSKRIFT] og erstat med OVERSKRIFT + linjeskift
-    # Vi tilføjer ekstra linjeskift før hver sektion for at skabe luft i Word
     formatted = re.sub(r'\[(.*?)\]', r'\n\n\1\n', text)
     return formatted.strip()
 
@@ -113,57 +75,27 @@ def fill_cv_docx(template, data_dict):
     try:
         template.seek(0)
         doc = Document(template)
-        
-        # Vi formaterer alle værdier i data_dict så de ser godt ud i Word
         clean_data = {k: format_text_for_word(str(v)) for k, v in data_dict.items()}
 
         for p in doc.paragraphs:
             for key, value in clean_data.items():
-                if key in p.text:
-                    p.text = p.text.replace(key, value)
+                if key in p.text: p.text = p.text.replace(key, value)
         
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for p in cell.paragraphs:
                         for key, value in clean_data.items():
-                            if key in p.text:
-                                p.text = p.text.replace(key, value)
+                            if key in p.text: p.text = p.text.replace(key, value)
         
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
         return buf
-    except Exception as e:
-        st.error(f"Word-fejl: {e}")
-        return None
-
-def style_cv_entries(raw_text):
-    if not raw_text: return ""
-    pattern = r'(\[.*?\])'
-    segments = re.split(pattern, raw_text)
-    formatted_html = ""
-    current_headline = None
-    
-    for segment in segments:
-        segment = segment.strip()
-        if not segment: continue
-        if segment.startswith('[') and segment.endswith(']'):
-            current_headline = segment.replace('[', '').replace(']', '')
-        else:
-            if current_headline:
-                formatted_html += f"""
-                <div class='entry-container'>
-                    <div class='entry-headline'>{current_headline}</div>
-                    <div class='cv-text'>{segment}</div>
-                </div>"""
-                current_headline = None
-            else:
-                formatted_html += f"<div class='entry-container'><div class='cv-text'>{segment}</div></div>"
-    return formatted_html
+    except: return None
 
 # --- APP FLOW ---
-st.markdown("<h1>🎯 CV-Builder Pro & Match Analyst</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🎯 CV-Builder Pro: Redigér & Optimer</h1>", unsafe_allow_html=True)
 
 if 'cv_step' not in st.session_state: st.session_state.cv_step = 1
 
@@ -181,7 +113,7 @@ if st.session_state.cv_step == 1:
             st.session_state.temp_job_text = get_text_from_url(job_url)
         job_text = st.text_area("Jobbeskrivelse:", value=st.session_state.get('temp_job_text', ""), height=250)
 
-    if st.button("Generér CV med korrekt formatering ✨", type="primary", use_container_width=True):
+    if st.button("Generér udkast ✨", type="primary", use_container_width=True):
         if master_cv and job_text:
             st.session_state.master_cv_text = extract_pdf(master_cv)
             st.session_state.job_content = job_text
@@ -191,82 +123,64 @@ if st.session_state.cv_step == 1:
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI optimerer resultater og formaterer afsnit..."):
-        try:
+    if 'ai_output' not in st.session_state:
+        with st.spinner("AI analyserer og skriver..."):
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
             Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et så det matcher jobopslaget.
-            
-            KRAV:
-            1. SPROG: Skriv i 1. person ("Jeg").
-            2. RESULTATER: Beskriv konkrete resultater i brødteksten for hvert job.
-            3. STRUKTUR: HVER post (job, uddannelse, kursus) SKAL starte med: [TITEL | STED | PERIODE].
+            FOKUS: 1. person ("Jeg"), konkrete RESULTATER, og brug af vigtige nøgleord fra jobopslaget.
+            STRUKTUR: Hver post skal starte med [TITEL | STED | PERIODE].
             
             SVAR KUN I JSON FORMAT:
-            - 'analyse': {{ 'score': int, 'vurdering': str, 'sandsynlighed': str }}
-            - 'kontakt': str
-            - 'profil': str
-            - 'erfaring': str
-            - 'uddannelse': str
-            - 'kurser': str
-            - 'sprog': str
-            - 'kompetencer': str
-
-            DATA:
-            JOB: {st.session_state.job_content} | CV: {st.session_state.master_cv_text}
+            {{
+              "analyse": {{ "score": int, "vurdering": str, "manglende_ord": list }},
+              "kontakt": str, "profil": str, "erfaring": str, "uddannelse": str, "sprog": str, "kompetencer": str
+            }}
+            DATA: JOB: {st.session_state.job_content} | CV: {st.session_state.master_cv_text}
             """
-            
-            resp = client.chat.completions.create(
-                model="gpt-4o", 
-                messages=[{"role": "user", "content": prompt}], 
-                response_format={"type": "json_object"}
-            )
-            res = json.loads(resp.choices[0].message.content)
-            ana = res.get('analyse', {})
+            resp = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
+            st.session_state.ai_output = json.loads(resp.choices[0].message.content)
 
-            # --- ANALYSE ---
-            st.markdown("<div class='analyse-block'>", unsafe_allow_html=True)
-            col_score, col_details = st.columns([1, 2])
-            with col_score:
-                st.markdown(f"<div class='score-container'><span class='score-number'>{ana.get('score')}%</span></div>", unsafe_allow_html=True)
-            with col_details:
-                st.markdown(f"### Match Vurdering")
-                st.write(f"{ana.get('vurdering')}")
-                st.progress(ana.get('score', 0) / 100)
-            st.markdown("</div>", unsafe_allow_html=True)
+    res = st.session_state.ai_output
+    ana = res.get('analyse', {})
 
-            # --- FORHÅNDSVISNING ---
-            st.markdown(f"<div class='cv-block' style='text-align:center;'><h1>{st.session_state.user_name}</h1>{res.get('kontakt', '')}</div>", unsafe_allow_html=True)
-            
-            col_l, col_r = st.columns([2, 1], gap="medium")
-            with col_l:
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil</div><div class='cv-text'>{res.get('profil', '')}</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring</div>{style_cv_entries(res.get('erfaring', ''))}</div>", unsafe_allow_html=True)
-            with col_r:
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kompetencer</div><div class='cv-text'>{res.get('kompetencer', '')}</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>{style_cv_entries(res.get('uddannelse', ''))}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Sprog</div>{style_cv_entries(res.get('sprog', ''))}</div>", unsafe_allow_html=True)
+    # --- ANALYSE SEKTION ---
+    st.markdown("<div class='analyse-block'>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 2, 2])
+    c1.markdown(f"<div class='score-container'><span class='score-number'>{ana.get('score')}%</span>Match</div>", unsafe_allow_html=True)
+    c2.write(f"**Vurdering:** {ana.get('vurdering')}")
+    c3.write("**Manglende nøgleord:**")
+    c3.write(", ".join(ana.get('manglende_ord', [])))
+    st.markdown("</div>", unsafe_allow_html=True)
 
-            # --- DOWNLOAD ---
-            if st.session_state.cv_template:
-                replacements = {
-                    "{{NAVN}}": st.session_state.user_name,
-                    "{{CV_KONTAKT}}": res.get('kontakt', ''),
-                    "{{CV_PROFIL}}": res.get('profil', ''),
-                    "{{CV_ERFARING}}": res.get('erfaring', ''),
-                    "{{CV_UDDANNELSE}}": res.get('uddannelse', ''),
-                    "{{CV_KURSER}}": res.get('kurser', ''),
-                    "{{CV_SPROG}}": res.get('sprog', ''),
-                    "{{CV_KOMPETENCER}}": res.get('kompetencer', '')
-                }
-                final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
-                if final_doc:
-                    st.download_button("Download CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+    # --- REDIGERINGS SEKTION ---
+    st.subheader("✍️ Tilpas dit CV")
+    st.info("Herunder kan du rette i teksten før download. Husk at fjerne klammerne [ ] hvis de generer dig, eller lad dem stå for struktur.")
+    
+    col_l, col_r = st.columns(2)
+    with col_l:
+        edit_profil = st.text_area("Profiltekst:", value=res.get('profil'), height=200)
+        edit_erfaring = st.text_area("Erhvervserfaring (Brug [TITEL | STED | DATO]):", value=res.get('erfaring'), height=500)
+    with col_r:
+        edit_kontakt = st.text_input("Kontaktinfo:", value=res.get('kontakt'))
+        edit_kompetencer = st.text_area("Kompetencer:", value=res.get('kompetencer'), height=150)
+        edit_uddannelse = st.text_area("Uddannelse:", value=res.get('uddannelse'), height=200)
+        edit_sprog = st.text_area("Sprog:", value=res.get('sprog'), height=100)
 
-        except Exception as e:
-            st.error(f"Fejl: {e}")
+    # --- DOWNLOAD MED REDIGERET INDHOLD ---
+    if st.session_state.cv_template:
+        replacements = {
+            "{{NAVN}}": st.session_state.user_name,
+            "{{CV_KONTAKT}}": edit_kontakt,
+            "{{CV_PROFIL}}": edit_profil,
+            "{{CV_ERFARING}}": edit_erfaring,
+            "{{CV_UDDANNELSE}}": edit_uddannelse,
+            "{{CV_SPROG}}": edit_sprog,
+            "{{CV_KOMPETENCER}}": edit_kompetencer
+        }
+        final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
+        st.download_button("Download dit tilpassede CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
 
     if st.button("Start forfra 🔄"):
         for key in list(st.session_state.keys()): del st.session_state[key]
-        st.session_state.cv_step = 1
         st.rerun()
