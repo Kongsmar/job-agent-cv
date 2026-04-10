@@ -13,9 +13,11 @@ st.set_page_config(page_title="Strategisk CV-Builder Pro", page_icon="🎓", lay
 
 st.markdown("""
 <style>
+    /* Global Styling */
     .stApp { background-color: #1a1c24; color: #e0e0e0; }
     h1 { text-align: center; color: #ffffff !important; border-bottom: 2px solid #4a90e2; padding-bottom: 15px; font-weight: 800; }
     
+    /* CV Sektioner - De "fine bokse" */
     .cv-block {
         background-color: #2d303d;
         padding: 25px;
@@ -29,9 +31,9 @@ st.markdown("""
         font-size: 1.4em;
         font-weight: bold;
         color: #4a90e2;
-        margin-bottom: 15px;
+        margin-bottom: 20px;
         border-bottom: 1px solid #4a4d5e;
-        padding-bottom: 5px;
+        padding-bottom: 8px;
         text-transform: uppercase;
     }
     
@@ -42,36 +44,16 @@ st.markdown("""
         color: #f0f0f0;
     }
 
+    /* Overskrifter for de enkelte elementer (jobs, uddannelser) */
     .entry-headline {
         background-color: #262936;
-        padding: 8px 12px;
-        border-radius: 6px;
-        border: 1px solid #3a3d4d;
+        padding: 12px 18px;
+        border-radius: 8px;
+        border: 1px solid #4a4d5e;
         color: #ffffff;
         font-weight: bold;
-        margin-bottom: 8px;
-    }
-
-    .analyse-block {
-        background-color: #262936;
-        padding: 25px;
-        border-radius: 12px;
-        border: 2px solid #4a90e2;
-        margin-bottom: 30px;
-    }
-
-    .score-container {
-        background-color: #0e1117;
-        padding: 15px;
-        border-radius: 10px;
-        text-align: center;
-        border: 1px solid #4a90e2;
-    }
-    
-    .score-number {
-        font-size: 2.8em;
-        font-weight: 800;
-        color: #4a90e2;
+        font-size: 1.1em;
+        margin-bottom: 15px;
         display: block;
     }
 </style>
@@ -96,7 +78,8 @@ def extract_pdf(file):
 
 def format_text_for_word(text):
     if not text or len(str(text).strip()) < 2: return ""
-    formatted = re.sub(r'\[(.*?)\]', r'\n\n\1\n', str(text))
+    # Gør [OVERSKRIFT] pænere i Word
+    formatted = re.sub(r'(\[.*?\])', r'\n\n\1\n', str(text))
     return formatted.strip()
 
 def fill_cv_docx(template, data_dict):
@@ -120,31 +103,43 @@ def fill_cv_docx(template, data_dict):
     except: return None
 
 def style_cv_entries(raw_text):
+    """Opdeler teksten i visuelle felter (bokse) i appen."""
     if not raw_text or len(str(raw_text).strip()) < 5: return None
     pattern = r'(\[.*?\])'
-    segments = re.split(pattern, str(raw_text))
+    # Splitter ved [OVERSKRIFT] men beholder overskriften i listen
+    parts = re.split(pattern, str(raw_text))
+    
     formatted_html = ""
-    current_headline = None
-    for segment in segments:
-        segment = segment.strip()
-        if not segment: continue
-        if segment.startswith('[') and segment.endswith(']'):
-            current_headline = segment.replace('[', '').replace(']', '')
+    i = 0
+    while i < len(parts):
+        part = parts[i].strip()
+        if not part:
+            i += 1
+            continue
+        
+        # Hvis delen er en overskrift [STILLING | STED | PERIODE]
+        if part.startswith('[') and part.endswith(']'):
+            headline = part.replace('[', '').replace(']', '')
+            # Indholdet er den næste del i listen
+            content = parts[i+1].strip() if (i+1) < len(parts) else ""
+            
+            # Lav en dedikeret boks for dette element
+            formatted_html += f"""
+            <div class='cv-block'>
+                <div class='entry-headline'>{headline}</div>
+                <div class='cv-text'>{content}</div>
+            </div>"""
+            i += 2
         else:
-            if current_headline:
-                formatted_html += f"""
-                <div style='margin-bottom: 25px;'>
-                    <div class='entry-headline'>{current_headline}</div>
-                    <div class='cv-text'>{segment}</div>
-                </div>"""
-                current_headline = None
-            else:
-                formatted_html += f"<div style='margin-bottom:15px;' class='cv-text'>{segment}</div>"
+            # Hvis der er løs tekst (uden overskrift), vis den i en simpel boks
+            formatted_html += f"""
+            <div class='cv-block'>
+                <div class='cv-text'>{part}</div>
+            </div>"""
+            i += 1
     return formatted_html
 
 # --- APP FLOW ---
-st.markdown("<h1>🎓 CV-Builder Pro (Substans & Brobygning)</h1>", unsafe_allow_html=True)
-
 if 'cv_step' not in st.session_state: st.session_state.cv_step = 1
 
 if st.session_state.cv_step == 1:
@@ -171,23 +166,18 @@ if st.session_state.cv_step == 1:
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI analyserer substans og vægter dine erfaringer..."):
+    with st.spinner("AI korrigerer opdeling og genopretter de fine bokse..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
-            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et efter disse regler:
+            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et efter disse strenge regler:
             
-            1. VÆGTNING AF SUBSTANS: Analyser erhvervserfaringerne. De roller, hvor der er mest ansvar og flest resultater i Master-CV'et, skal have mere plads og dybde.
-            
-            2. STRATEGISK BROBYGNING: For de tunge erfaringer skal du beskrive, hvordan denne ballast gør brugeren i stand til at løse specifikke opgaver i det nye jobopslag.
-            
-            3. TERMINOLOGI: Kald kun erhvervsarbejde for "erfaring". Uddannelse omtales som "faglig indsigt/specialisering".
-            
-            4. SANDFÆRDIGHED: Du må IKKE opfinde tal. Beskriv værdien kvalitativt hvis tal mangler.
-            
-            5. PROFILTEKST: 5-8 linjer der kobler din tungeste erfaring til virksomhedens fremtidige succes.
-            
-            6. STRUKTUR: Omvendt kronologisk. Hver post: [TITEL | VIRKSOMHED | PERIODE]. Returner "" for tomme sektioner.
+            1. BEHOLD DISKRETE POSTER: Hver ansættelse fra Master-CV'et skal forblive sin egen unikke post. Du må ikke slå dem sammen.
+            2. FORMAT: Hver post (job/uddannelse/kursus) skal starte med overskriften i firkantede klammer: [STILLING | VIRKSOMHED | PERIODE].
+            3. VÆGTNING: Beskriv relevante roller dybdegående (substans). Kortere eller urelaterede roller holdes korte.
+            4. BROBYGNING: I brødteksten for de vigtige roller skal du forklare, hvordan netop denne ballast gør dig i stand til at løse opgaver i det nye jobopslag.
+            5. TERMINOLOGI: Kald kun erhvervsarbejde for "erfaring". Uddannelse omtales som "faglig indsigt/specialisering".
+            6. SANDFÆRDIGHED: Digt ALDRIG tal. Hvis de ikke findes, så beskriv værdien kvalitativt.
 
             SVAR KUN I JSON FORMAT:
             {{
@@ -200,45 +190,56 @@ elif st.session_state.cv_step == 2:
             
             resp = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
             res = json.loads(resp.choices[0].message.content)
-            ana = res.get('analyse', {})
-
-            # --- ANALYSE VISNING ---
-            st.markdown("<div class='analyse-block'>", unsafe_allow_html=True)
-            col_score, col_details = st.columns([1, 2])
-            with col_score:
-                st.markdown(f"<div class='score-container'><span class='score-number'>{ana.get('score')}%</span>Match</div>", unsafe_allow_html=True)
-            with col_details:
-                st.markdown(f"### Strategisk Analyse")
-                st.write(f"{ana.get('vurdering')}")
-                st.progress(ana.get('score', 0) / 100)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            # --- FORHÅNDSVISNING ---
-            st.markdown(f"<div class='cv-block' style='text-align:center;'><h1>{st.session_state.user_name}</h1>{res.get('kontakt', '')}</div>", unsafe_allow_html=True)
+            
+            # --- VISNING I APP ---
+            
+            # Vis kontaktinfo i toppen (en boks)
+            st.markdown(f"""
+            <div class='cv-block' style='text-align:center;'>
+                <h1>{st.session_state.user_name}</h1>
+                <div class='cv-text'>{res.get('kontakt', '')}</div>
+            </div>""", unsafe_allow_html=True)
             
             col_l, col_r = st.columns([2, 1], gap="medium")
             with col_l:
+                # Profilboks
                 if res.get('profil'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil & Værdi</div><div class='cv-text'>{res.get('profil')}</div></div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class='cv-block'>
+                        <div class='cv-section-title'>Profil & Værdi</div>
+                        <div class='cv-text'>{res.get('profil')}</div>
+                    </div>""", unsafe_allow_html=True)
                 
-                erfaring_html = style_cv_entries(res.get('erfaring'))
-                if erfaring_html:
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring (Vægtet)</div>{erfaring_html}</div>", unsafe_allow_html=True)
+                # Erhvervserfaring - Vis hver post i sin egen boks
+                if res.get('erfaring'):
+                    st.markdown("<div class='cv-section-title'>Erhvervserfaring</div>", unsafe_allow_html=True)
+                    # style_cv_entries genererer nu en cv-block for hvert element
+                    erfaring_html = style_cv_entries(res.get('erfaring'))
+                    if erfaring_html:
+                        st.markdown(erfaring_html, unsafe_allow_html=True)
             
             with col_r:
+                # Kompetencer (en boks)
                 if res.get('kompetencer'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kompetencer</div><div class='cv-text'>{res.get('kompetencer')}</div></div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class='cv-block'>
+                        <div class='cv-section-title'>Kompetencer</div>
+                        <div class='cv-text'>{res.get('kompetencer')}</div>
+                    </div>""", unsafe_allow_html=True)
                 
-                uddannelse_html = style_cv_entries(res.get('uddannelse'))
-                if uddannelse_html:
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>{uddannelse_html}</div>", unsafe_allow_html=True)
+                # Uddannelse - Vis hver post i sin egen boks
+                if res.get('uddannelse'):
+                    st.markdown("<div class='cv-section-title'>Uddannelse</div>", unsafe_allow_html=True)
+                    uddannelse_html = style_cv_entries(res.get('uddannelse'))
+                    if uddannelse_html:
+                        st.markdown(uddannelse_html, unsafe_allow_html=True)
                 
-                kurser_html = style_cv_entries(res.get('kurser'))
-                if kurser_html:
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kurser</div>{kurser_html}</div>", unsafe_allow_html=True)
-                
-                if res.get('sprog'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Sprog</div><div class='cv-text'>{res.get('sprog')}</div></div>", unsafe_allow_html=True)
+                # Kurser - Vis hver post i sin egen boks
+                if res.get('kurser'):
+                    st.markdown("<div class='cv-section-title'>Kurser</div>", unsafe_allow_html=True)
+                    kurser_html = style_cv_entries(res.get('kurser'))
+                    if kurser_html:
+                        st.markdown(kurser_html, unsafe_allow_html=True)
 
             # --- DOWNLOAD ---
             if st.session_state.cv_template:
@@ -254,7 +255,7 @@ elif st.session_state.cv_step == 2:
                     "{{CV_FRITID}}": res.get('fritid', '')
                 }
                 final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Download CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+                st.download_button("Download korrigeret CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
 
         except Exception as e:
             st.error(f"Der skete en fejl: {e}")
