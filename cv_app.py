@@ -133,7 +133,7 @@ def style_cv_entries(raw_text):
         else:
             if current_headline:
                 formatted_html += f"""
-                <div style='margin-bottom: 20px;'>
+                <div style='margin-bottom: 25px;'>
                     <div class='entry-headline'>{current_headline}</div>
                     <div class='cv-text'>{segment}</div>
                 </div>"""
@@ -143,7 +143,7 @@ def style_cv_entries(raw_text):
     return formatted_html
 
 # --- APP FLOW ---
-st.markdown("<h1>🎓 Strategisk CV-Builder (Præcis terminologi)</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🎓 Strategisk CV-Builder (Bridge-Builder Edition)</h1>", unsafe_allow_html=True)
 
 if 'cv_step' not in st.session_state: st.session_state.cv_step = 1
 
@@ -161,7 +161,7 @@ if st.session_state.cv_step == 1:
             st.session_state.temp_job_text = get_text_from_url(job_url)
         job_text = st.text_area("Indsæt jobbeskrivelsen her:", value=st.session_state.get('temp_job_text', ""), height=250)
 
-    if st.button("Generér præcist CV ✨", type="primary", use_container_width=True):
+    if st.button("Generér strategisk CV ✨", type="primary", use_container_width=True):
         if master_cv and job_text:
             st.session_state.master_cv_text = extract_pdf(master_cv)
             st.session_state.job_content = job_text
@@ -171,18 +171,24 @@ if st.session_state.cv_step == 1:
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI sikrer præcis adskillelse af erfaring og uddannelse..."):
+    with st.spinner("AI bygger bro mellem din erfaring og det nye job..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
-            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et efter disse strenge regler:
+            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et efter disse regler:
             
-            1. TERMINOLOGI OM ERFARING: "Erfaring" må KUN bruges om indhold fra erhvervserfaring-sektionen. 
-            2. TERMINOLOGI OM UDDANNELSE: Viden fra uddannelse må ALDRIG kaldes "erfaring". Brug i stedet ord som "faglig indsigt", "teoretisk fundament", "specialiseret viden" eller "akademisk baggrund".
-            3. PROFILTEKST: Skriv en elevatortale på 5-8 linjer. Vær ekstremt præcis: Hvis brugeren har erhvervserfaring, fremhæv denne som 'erfaring'. Hvis brugeren kun har lært om et emne på studiet, skal det beskrives som 'faglig kompetence' eller 'viden'.
-            4. RELEVANS: Slet alt irrelevant. Spejl virksomhedens nøgleord.
-            5. RESULTATER: Brug formlen: "Jeg har opnået [reelt resultat] ved at anvende [kompetence]". Digt ALDRIG tal eller resultater.
-            6. STRUKTUR: Omvendt kronologisk. Hver post starter med [TITEL | VIRKSOMHED/STED | PERIODE].
+            1. BROBYGNING I ERFARING: For hver post i erhvervserfaringen skal du både beskrive hvad brugeren har opnået, OG hvordan netop denne erfaring gør brugeren i stand til at løse de specifikke opgaver i det nye jobopslag. 
+            Eksempel: "Jeg har opnået [resultat]. Denne erfaring medfører, at jeg hos jer effektivt kan [specifik opgave fra jobopslag]."
+            
+            2. TERMINOLOGI: Brug kun ordet "erfaring" om erhvervserfaring. Uddannelse er "faglig indsigt/baggrund".
+            
+            3. SANDFÆRDIGHED: Du må IKKE opfinde tal eller fakta. Hvis der mangler tal, så beskriv værdien kvalitativt.
+            
+            4. PROFILTEKST: 5-8 linjer faglig elevatortale. Skab et klart match mellem fortidens bedrifter og fremtidens værdi for virksomheden.
+            
+            5. STRUKTUR: Omvendt kronologisk. Hver post starter med [TITEL | VIRKSOMHED | PERIODE].
+            
+            6. TOMME SEKTIONER: Hvis Master-CV'et mangler en sektion (f.eks. 'kurser'), returner "".
 
             SVAR KUN I JSON FORMAT:
             {{
@@ -203,7 +209,7 @@ elif st.session_state.cv_step == 2:
             with col_score:
                 st.markdown(f"<div class='score-container'><span class='score-number'>{ana.get('score')}%</span>Match</div>", unsafe_allow_html=True)
             with col_details:
-                st.markdown(f"### Strategisk Vurdering")
+                st.markdown(f"### Strategisk Analyse")
                 st.write(f"{ana.get('vurdering')}")
                 st.progress(ana.get('score', 0) / 100)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -214,11 +220,11 @@ elif st.session_state.cv_step == 2:
             col_l, col_r = st.columns([2, 1], gap="medium")
             with col_l:
                 if res.get('profil'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil</div><div class='cv-text'>{res.get('profil')}</div></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil & Værdiskabelse</div><div class='cv-text'>{res.get('profil')}</div></div>", unsafe_allow_html=True)
                 
                 erfaring_html = style_cv_entries(res.get('erfaring'))
                 if erfaring_html:
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring & Resultater</div>{erfaring_html}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Målrettet Erhvervserfaring</div>{erfaring_html}</div>", unsafe_allow_html=True)
             
             with col_r:
                 if res.get('kompetencer'):
@@ -226,7 +232,7 @@ elif st.session_state.cv_step == 2:
                 
                 uddannelse_html = style_cv_entries(res.get('uddannelse'))
                 if uddannelse_html:
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>{uddannelse_html}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelsesmæssig Baggrund</div>{uddannelse_html}</div>", unsafe_allow_html=True)
                 
                 kurser_html = style_cv_entries(res.get('kurser'))
                 if kurser_html:
@@ -252,7 +258,7 @@ elif st.session_state.cv_step == 2:
                     "{{CV_FRITID}}": res.get('fritid', '')
                 }
                 final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Download præcist CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+                st.download_button("Download målrettet CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
 
         except Exception as e:
             st.error(f"Der skete en fejl: {e}")
