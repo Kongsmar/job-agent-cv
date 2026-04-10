@@ -143,7 +143,7 @@ def style_cv_entries(raw_text):
     return formatted_html
 
 # --- APP FLOW ---
-st.markdown("<h1>🎓 Strategisk CV-Builder (Bridge-Builder Edition)</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🎓 CV-Builder Pro (Substans & Brobygning)</h1>", unsafe_allow_html=True)
 
 if 'cv_step' not in st.session_state: st.session_state.cv_step = 1
 
@@ -171,24 +171,23 @@ if st.session_state.cv_step == 1:
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI bygger bro mellem din erfaring og det nye job..."):
+    with st.spinner("AI analyserer substans og vægter dine erfaringer..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
             Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et efter disse regler:
             
-            1. BROBYGNING I ERFARING: For hver post i erhvervserfaringen skal du både beskrive hvad brugeren har opnået, OG hvordan netop denne erfaring gør brugeren i stand til at løse de specifikke opgaver i det nye jobopslag. 
-            Eksempel: "Jeg har opnået [resultat]. Denne erfaring medfører, at jeg hos jer effektivt kan [specifik opgave fra jobopslag]."
+            1. VÆGTNING AF SUBSTANS: Analyser erhvervserfaringerne. De roller, hvor der er mest ansvar og flest resultater i Master-CV'et, skal have mere plads og dybde.
             
-            2. TERMINOLOGI: Brug kun ordet "erfaring" om erhvervserfaring. Uddannelse er "faglig indsigt/baggrund".
+            2. STRATEGISK BROBYGNING: For de tunge erfaringer skal du beskrive, hvordan denne ballast gør brugeren i stand til at løse specifikke opgaver i det nye jobopslag.
             
-            3. SANDFÆRDIGHED: Du må IKKE opfinde tal eller fakta. Hvis der mangler tal, så beskriv værdien kvalitativt.
+            3. TERMINOLOGI: Kald kun erhvervsarbejde for "erfaring". Uddannelse omtales som "faglig indsigt/specialisering".
             
-            4. PROFILTEKST: 5-8 linjer faglig elevatortale. Skab et klart match mellem fortidens bedrifter og fremtidens værdi for virksomheden.
+            4. SANDFÆRDIGHED: Du må IKKE opfinde tal. Beskriv værdien kvalitativt hvis tal mangler.
             
-            5. STRUKTUR: Omvendt kronologisk. Hver post starter med [TITEL | VIRKSOMHED | PERIODE].
+            5. PROFILTEKST: 5-8 linjer der kobler din tungeste erfaring til virksomhedens fremtidige succes.
             
-            6. TOMME SEKTIONER: Hvis Master-CV'et mangler en sektion (f.eks. 'kurser'), returner "".
+            6. STRUKTUR: Omvendt kronologisk. Hver post: [TITEL | VIRKSOMHED | PERIODE]. Returner "" for tomme sektioner.
 
             SVAR KUN I JSON FORMAT:
             {{
@@ -220,11 +219,11 @@ elif st.session_state.cv_step == 2:
             col_l, col_r = st.columns([2, 1], gap="medium")
             with col_l:
                 if res.get('profil'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil & Værdiskabelse</div><div class='cv-text'>{res.get('profil')}</div></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Profil & Værdi</div><div class='cv-text'>{res.get('profil')}</div></div>", unsafe_allow_html=True)
                 
                 erfaring_html = style_cv_entries(res.get('erfaring'))
                 if erfaring_html:
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Målrettet Erhvervserfaring</div>{erfaring_html}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring (Vægtet)</div>{erfaring_html}</div>", unsafe_allow_html=True)
             
             with col_r:
                 if res.get('kompetencer'):
@@ -232,7 +231,7 @@ elif st.session_state.cv_step == 2:
                 
                 uddannelse_html = style_cv_entries(res.get('uddannelse'))
                 if uddannelse_html:
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelsesmæssig Baggrund</div>{uddannelse_html}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>{uddannelse_html}</div>", unsafe_allow_html=True)
                 
                 kurser_html = style_cv_entries(res.get('kurser'))
                 if kurser_html:
@@ -240,9 +239,6 @@ elif st.session_state.cv_step == 2:
                 
                 if res.get('sprog'):
                     st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Sprog</div><div class='cv-text'>{res.get('sprog')}</div></div>", unsafe_allow_html=True)
-                
-                if res.get('fritid'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Personligt</div><div class='cv-text'>{res.get('fritid')}</div></div>", unsafe_allow_html=True)
 
             # --- DOWNLOAD ---
             if st.session_state.cv_template:
@@ -258,7 +254,7 @@ elif st.session_state.cv_step == 2:
                     "{{CV_FRITID}}": res.get('fritid', '')
                 }
                 final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Download målrettet CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+                st.download_button("Download CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
 
         except Exception as e:
             st.error(f"Der skete en fejl: {e}")
