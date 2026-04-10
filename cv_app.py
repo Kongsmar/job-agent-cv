@@ -8,7 +8,7 @@ from PyPDF2 import PdfReader
 import json
 
 # --- KONFIGURATION ---
-st.set_page_config(page_title="CV-Builder Pro: Master Edition", page_icon="📄", layout="wide")
+st.set_page_config(page_title="CV-Builder Pro: High Impact Edition", page_icon="📄", layout="wide")
 
 # --- HJÆLPEFUNKTIONER ---
 def get_text_from_url(url):
@@ -39,15 +39,19 @@ def fill_cv_docx(template, data_dict):
     try:
         template.seek(0)
         doc = Document(template)
+        # Erstat tags i brødtekst, tabeller og tekstbokse
         for p in doc.paragraphs:
             for key, value in data_dict.items():
-                if key in p.text: p.text = p.text.replace(key, str(value))
+                if key in p.text:
+                    # Vi bruger replace men sikrer os at linjeskift (\n) bevares korrekt i Word
+                    p.text = p.text.replace(key, str(value))
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for p in cell.paragraphs:
                         for key, value in data_dict.items():
-                            if key in p.text: p.text = p.text.replace(key, str(value))
+                            if key in p.text:
+                                p.text = p.text.replace(key, str(value))
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
@@ -55,7 +59,7 @@ def fill_cv_docx(template, data_dict):
     except: return None
 
 # --- APP FLOW ---
-st.title("📄 CV-Builder Pro")
+st.title("📄 CV-Builder Pro: Målrettet & Resultatfokuseret")
 
 if 'cv_step' not in st.session_state: st.session_state.cv_step = 1
 
@@ -74,7 +78,7 @@ if st.session_state.cv_step == 1:
             st.session_state.temp_job_text = get_text_from_url(job_url)
         job_text = st.text_area("Jobtekst:", value=st.session_state.get('temp_job_text', ""), height=400)
 
-    if st.button("Generér komplet CV ✨", disabled=not (master_cv and job_text)):
+    if st.button("Generér målrettet CV ✨", disabled=not (master_cv and job_text)):
         st.session_state.master_cv_text = extract_pdf(master_cv)
         st.session_state.job_content = job_text
         st.session_state.cv_template = cv_template
@@ -83,22 +87,25 @@ if st.session_state.cv_step == 1:
         st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI strukturerer dit fulde CV..."):
+    with st.spinner("AI optimerer dine resultater og matcher jobopslaget..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
-            Du er en professionel CV-editor. Analysér Master-CV'et og omskriv det til et målrettet CV.
-            
-            VIGTIGT: Du skal inkludere ALLE sektioner fra dataene. 
-            Hvis der findes uddannelse, kurser eller sprog i Master-CV'et, skal de med.
+            Du er en elite-rekrutteringskonsulent. Din opgave er at omskrive Master-CV'et, så det matcher jobopslaget 100%.
+
+            FORMÅL:
+            1. Uddannelse og erhvervserfaring SKAL opstilles i tydelige afsnit med punkttegn (bullets).
+            2. Erhvervserfaring skal fokusere på konkrete RESULTATER (f.eks. tal, procenter, vækst, forbedringer), der er relevante for det nye job.
+            3. Match terminologien og de efterspurgte kompetencer i jobopslaget.
 
             Svar KUN i JSON format:
-            - 'profil': Skarp profiltekst.
-            - 'erfaring': Erhvervserfaring med resultatorienterede bullets.
-            - 'uddannelse': Liste over uddannelser (f.eks. '2015-2018: Cand.mag, KU').
-            - 'kurser': Liste over relevante kurser og certificeringer.
-            - 'sprog': Sprog og niveau (f.eks. 'Engelsk: Forhandlingsniveau').
-            - 'kompetencer': De 10 vigtigste faglige nøgleord.
+            - 'kontakt': Tlf, mail og LinkedIn på én linje.
+            - 'profil': En fængende profiltekst (5-6 linjer).
+            - 'erfaring': Liste over jobs. Format pr. job: Stilling, Firma, Årstal efterfulgt af 3-4 bullets med resultater. Brug '\n' til linjeskift.
+            - 'uddannelse': Uddannelse opstillet med årstal, titel og uddannelsessted. Brug '\n' til linjeskift.
+            - 'kurser': Relevante kurser/certificeringer.
+            - 'sprog': Sprog og niveau.
+            - 'kompetencer': De 10 vigtigste faglige nøgleord fra jobopslaget.
 
             DATA:
             JOB: {st.session_state.job_content}
@@ -112,20 +119,21 @@ elif st.session_state.cv_step == 2:
             )
             res = json.loads(resp.choices[0].message.content)
 
-            st.success("CV genereret med alle sektioner!")
+            st.success("CV er klar med resultatfokus!")
             
-            tabs = st.tabs(["Erfaring", "Uddannelse & Kurser", "Profil & Sprog"])
-            with tabs[0]: st.write(res.get('erfaring'))
+            tabs = st.tabs(["Erhvervserfaring", "Uddannelse", "Profil & Kontakt"])
+            with tabs[0]: 
+                st.text(res.get('erfaring')) # .text bevarer linjeskift i visningen
             with tabs[1]: 
-                st.write("**Uddannelse:**", res.get('uddannelse'))
-                st.write("**Kurser:**", res.get('kurser'))
+                st.text(res.get('uddannelse'))
             with tabs[2]:
+                st.write("**Kontakt:**", res.get('kontakt'))
                 st.write("**Profil:**", res.get('profil'))
-                st.write("**Sprog:**", res.get('sprog'))
 
             if st.session_state.cv_template:
                 replacements = {
                     "{{NAVN}}": st.session_state.user_name,
+                    "{{CV_KONTAKT}}": res.get('kontakt', ''),
                     "{{CV_PROFIL}}": res.get('profil', ''),
                     "{{CV_ERFARING}}": res.get('erfaring', ''),
                     "{{CV_UDDANNELSE}}": res.get('uddannelse', ''),
@@ -134,7 +142,7 @@ elif st.session_state.cv_step == 2:
                     "{{CV_KOMPETENCER}}": res.get('kompetencer', '')
                 }
                 final_cv = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Hent det komplette CV (.docx) 📄", final_cv, f"CV_{st.session_state.user_name}.docx")
+                st.download_button("Hent dit nye CV (.docx) 📄", final_cv, f"CV_{st.session_state.user_name}.docx")
 
         except Exception as e:
             st.error(f"Fejl: {e}")
