@@ -48,10 +48,6 @@ st.markdown("""
         padding-bottom: 15px;
     }
     
-    .entry-container:last-child {
-        border-bottom: none;
-    }
-
     .entry-headline {
         background-color: #262936;
         padding: 10px 15px;
@@ -85,13 +81,6 @@ st.markdown("""
         color: #4a90e2;
         display: block;
     }
-    
-    .score-label {
-        font-size: 1em;
-        color: #ffffff;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -112,27 +101,44 @@ def extract_pdf(file):
         return "".join([p.extract_text() for p in reader.pages])
     except: return ""
 
+def format_text_for_word(text):
+    """Sørger for at fjerne klammer og indsætte dobbelt linjeskift før nye overskrifter i Word."""
+    if not text: return ""
+    # Find alle [OVERSKRIFT] og erstat med OVERSKRIFT + linjeskift
+    # Vi tilføjer ekstra linjeskift før hver sektion for at skabe luft i Word
+    formatted = re.sub(r'\[(.*?)\]', r'\n\n\1\n', text)
+    return formatted.strip()
+
 def fill_cv_docx(template, data_dict):
     try:
         template.seek(0)
         doc = Document(template)
+        
+        # Vi formaterer alle værdier i data_dict så de ser godt ud i Word
+        clean_data = {k: format_text_for_word(str(v)) for k, v in data_dict.items()}
+
         for p in doc.paragraphs:
-            for key, value in data_dict.items():
-                if key in p.text: p.text = p.text.replace(key, str(value))
+            for key, value in clean_data.items():
+                if key in p.text:
+                    p.text = p.text.replace(key, value)
+        
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for p in cell.paragraphs:
-                        for key, value in data_dict.items():
-                            if key in p.text: p.text = p.text.replace(key, str(value))
+                        for key, value in clean_data.items():
+                            if key in p.text:
+                                p.text = p.text.replace(key, value)
+        
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
         return buf
-    except: return None
+    except Exception as e:
+        st.error(f"Word-fejl: {e}")
+        return None
 
 def style_cv_entries(raw_text):
-    """Opdeler teksten i felter baseret på [OVERSKRIFT]-mønsteret."""
     if not raw_text: return ""
     pattern = r'(\[.*?\])'
     segments = re.split(pattern, raw_text)
@@ -175,7 +181,7 @@ if st.session_state.cv_step == 1:
             st.session_state.temp_job_text = get_text_from_url(job_url)
         job_text = st.text_area("Jobbeskrivelse:", value=st.session_state.get('temp_job_text', ""), height=250)
 
-    if st.button("Start Match-Analyse & Skriv CV ✨", type="primary", use_container_width=True):
+    if st.button("Generér CV med korrekt formatering ✨", type="primary", use_container_width=True):
         if master_cv and job_text:
             st.session_state.master_cv_text = extract_pdf(master_cv)
             st.session_state.job_content = job_text
@@ -185,19 +191,17 @@ if st.session_state.cv_step == 1:
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI målretter dit CV og fletter dine resultater ind..."):
+    with st.spinner("AI optimerer resultater og formaterer afsnit..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
-            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et så det matcher jobopslaget 100%.
+            Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et så det matcher jobopslaget.
             
-            VIGTIGE KRAV:
-            1. SPROG: Skriv i 1. person ("Jeg", "Mit").
-            2. MÅLRETNING: Analyser jobopslaget og brug de samme nøgleord og kompetencer i din tekst.
-            3. RESULTATER: I erhvervserfaringen SKAL du beskrive hvad jeg har opnået af konkrete resultater i mine tidligere roller.
-            4. STRUKTUR: HVER post (job, uddannelse, kursus) SKAL starte med en linje i klammer: [TITEL | STED | PERIODE].
-            5. BESKRIVELSE: Under hver klamme skriver du brødtekst uden bullets.
-
+            KRAV:
+            1. SPROG: Skriv i 1. person ("Jeg").
+            2. RESULTATER: Beskriv konkrete resultater i brødteksten for hvert job.
+            3. STRUKTUR: HVER post (job, uddannelse, kursus) SKAL starte med: [TITEL | STED | PERIODE].
+            
             SVAR KUN I JSON FORMAT:
             - 'analyse': {{ 'score': int, 'vurdering': str, 'sandsynlighed': str }}
             - 'kontakt': str
@@ -224,11 +228,10 @@ elif st.session_state.cv_step == 2:
             st.markdown("<div class='analyse-block'>", unsafe_allow_html=True)
             col_score, col_details = st.columns([1, 2])
             with col_score:
-                st.markdown(f"<div class='score-container'><span class='score-label'>Match Score</span><span class='score-number'>{ana.get('score')}%</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='score-container'><span class='score-number'>{ana.get('score')}%</span></div>", unsafe_allow_html=True)
             with col_details:
-                st.markdown(f"### Strategisk Match-Analyse")
-                st.write(f"**Chancer:** {ana.get('sandsynlighed')}")
-                st.write(f"**AI Vurdering:** {ana.get('vurdering')}")
+                st.markdown(f"### Match Vurdering")
+                st.write(f"{ana.get('vurdering')}")
                 st.progress(ana.get('score', 0) / 100)
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -243,8 +246,6 @@ elif st.session_state.cv_step == 2:
                 st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kompetencer</div><div class='cv-text'>{res.get('kompetencer', '')}</div></div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>{style_cv_entries(res.get('uddannelse', ''))}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Sprog</div>{style_cv_entries(res.get('sprog', ''))}</div>", unsafe_allow_html=True)
-                if res.get('kurser'):
-                    st.markdown(f"<div class='cv-block'><div class='cv-section-title'>Kurser</div>{style_cv_entries(res.get('kurser', ''))}</div>", unsafe_allow_html=True)
 
             # --- DOWNLOAD ---
             if st.session_state.cv_template:
@@ -259,7 +260,8 @@ elif st.session_state.cv_step == 2:
                     "{{CV_KOMPETENCER}}": res.get('kompetencer', '')
                 }
                 final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Download CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+                if final_doc:
+                    st.download_button("Download CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
 
         except Exception as e:
             st.error(f"Fejl: {e}")
