@@ -7,15 +7,13 @@ from docx import Document
 from PyPDF2 import PdfReader
 import json
 
-# --- KONFIGURATION & DESIGN (DET FLOTTE LAYOUT) ---
-st.set_page_config(page_title="CV-Builder Pro & Analyst AI", page_icon="🎯", layout="wide")
+# --- KONFIGURATION & DESIGN ---
+st.set_page_config(page_title="CV-Builder Pro", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
     .stApp { background-color: #1a1c24; color: #e0e0e0; }
     h1 { text-align: center; color: #ffffff !important; border-bottom: 2px solid #4a90e2; padding-bottom: 10px; }
-    
-    /* CV-Blocks fra det flotte layout */
     .cv-block {
         background-color: #2d303d;
         padding: 20px;
@@ -24,7 +22,6 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     }
-    
     .cv-section-title {
         font-size: 1.4em;
         font-weight: bold;
@@ -34,14 +31,12 @@ st.markdown("""
         padding-bottom: 5px;
         text-transform: uppercase;
     }
-    
     .cv-text {
         font-family: 'Georgia', serif;
         line-height: 1.7;
         white-space: pre-wrap;
         color: #f0f0f0;
     }
-
     .analyse-block {
         background-color: #262936;
         padding: 25px;
@@ -117,24 +112,25 @@ if st.session_state.cv_step == 1:
             st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI skaber dine afsnit i brødtekst..."):
+    with st.spinner("AI strukturerer dine afsnit i første person..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
             Du er elite-rekrutteringskonsulent. Omskriv Master-CV'et i BRØDTEKST.
             
-            KRAV:
-            1. Hver erhvervserfaring, uddannelse og kursus skal have sit eget afsnit med overskrift.
-            2. Skriv i narrativ brødtekst (ikke bullets). Beskriv ansvar og resultater flydende.
-            3. Match terminologien i jobopslaget 100%.
+            VIGTIGE KRAV:
+            1. SPROG: Skriv i 1. person (brug "Jeg", "Min", "Mit"). Omtal ALDRIG kandidaten i 3. person.
+            2. AFSNIT: Hvert job, hver uddannelse og hvert kursus SKAL præsenteres som et separat afsnit.
+            3. STRUKTUR: Hvert afsnit skal starte med en linje med [TITEL | STED | PERIODE] efterfulgt af et linjeskift og derefter selve brødteksten.
+            4. INDHOLD: Beskriv ansvar og resultater flydende i brødteksten uden brug af bullets.
 
             SVAR KUN I JSON FORMAT:
             - 'analyse': {{ 'score': int, 'vurdering': str, 'sandsynlighed': str }}
             - 'kontakt': str
             - 'profil': str
-            - 'erfaring': str (Individuelle jobs med beskrivende brødtekst)
-            - 'uddannelse': str (Individuelle uddannelser med beskrivende brødtekst)
-            - 'kurser': str (Individuelle kurser med beskrivende brødtekst)
+            - 'erfaring': str (Individuelle jobs adskilt af dobbelte linjeskift)
+            - 'uddannelse': str (Individuelle uddannelser adskilt af dobbelte linjeskift)
+            - 'kurser': str (Individuelle kurser adskilt af dobbelte linjeskift)
             - 'kompetencer': str (10 vigtigste ord)
 
             DATA:
@@ -159,7 +155,7 @@ elif st.session_state.cv_step == 2:
             st.write(f"**Vurdering:** {ana.get('vurdering')}")
             st.markdown("</div>", unsafe_allow_html=True)
 
-            # --- FLOT FORHÅNDSVISNING ---
+            # --- FORHÅNDSVISNING ---
             st.markdown(f"<div class='cv-block' style='text-align:center;'><h1>{st.session_state.user_name}</h1>{res.get('kontakt')}</div>", unsafe_allow_html=True)
             
             col_l, col_r = st.columns([2, 1], gap="medium")
@@ -184,7 +180,7 @@ elif st.session_state.cv_step == 2:
                     "{{CV_KOMPETENCER}}": res.get('kompetencer', '')
                 }
                 final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Download målrettet CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+                st.download_button("Download CV (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
 
         except Exception as e:
             st.error(f"Fejl: {e}")
