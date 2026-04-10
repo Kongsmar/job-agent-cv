@@ -7,59 +7,50 @@ from docx import Document
 from PyPDF2 import PdfReader
 import json
 
-# --- KONFIGURATION ---
-st.set_page_config(page_title="CV-Builder Pro & Analyst", page_icon="📊", layout="wide")
+# --- KONFIGURATION & DESIGN ---
+st.set_page_config(page_title="CV-Builder Pro: Brødtekst Edition", page_icon="✍️", layout="wide")
 
-# --- HJÆLPEFUNKTIONER ---
+st.markdown("""
+<style>
+    .stApp { background-color: #1a1c24; color: #e0e0e0; }
+    h1 { text-align: center; color: #ffffff; border-bottom: 2px solid #4a90e2; padding-bottom: 10px; }
+    .cv-block { background-color: #2d303d; padding: 25px; border-radius: 12px; border-left: 5px solid #4a90e2; margin-bottom: 20px; }
+    .cv-section-title { font-size: 1.3em; font-weight: bold; color: #4a90e2; margin-bottom: 10px; text-transform: uppercase; }
+    .cv-text { font-family: 'Georgia', serif; line-height: 1.7; white-space: pre-wrap; color: #f0f0f0; }
+    .analyse-card { background-color: #262936; padding: 20px; border-radius: 10px; border: 1px solid #4a90e2; margin-bottom: 25px; }
+</style>
+""", unsafe_allow_html=True)
+
+# --- FUNKTIONER ---
 def get_text_from_url(url):
-    """Henter og oprenser jobopslag fra nettet."""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
-            element.extract()
-        output = []
-        for tag in soup.find_all(['h1', 'h2', 'h3', 'p', 'li']):
-            text = tag.get_text().strip()
-            if text:
-                if tag.name in ['h1', 'h2', 'h3']: output.append(f"\n\n{text.upper()}\n")
-                elif tag.name == 'li': output.append(f"• {text}")
-                else: output.append(f"{text}\n")
-        return "\n".join(output)
-    except: return "Kunne ikke hente tekst automatisk. Indsæt venligst teksten manuelt."
+        for element in soup(["script", "style", "nav", "footer", "header"]): element.extract()
+        return "\n".join([tag.get_text().strip() for tag in soup.find_all(['h1', 'h2', 'p', 'li']) if tag.get_text()])
+    except: return "Kunne ikke hente tekst."
 
 def extract_pdf(file):
-    """Læser tekst fra PDF."""
     try:
         reader = PdfReader(file)
         return "".join([p.extract_text() for p in reader.pages])
     except: return ""
 
-def format_as_clean_text(data):
-    """Sikrer at data altid er en pæn tekststreng uden klammer."""
-    if isinstance(data, list):
-        return "\n".join([str(item).replace("[", "").replace("]", "").replace("'", "") for item in data])
-    return str(data).replace("[", "").replace("]", "").replace("'", "")
-
 def fill_cv_docx(template, data_dict):
-    """Fletter data ind i Word-skabelonen."""
     try:
         template.seek(0)
         doc = Document(template)
-        # Erstat i paragraffer og tabeller
         for p in doc.paragraphs:
             for key, value in data_dict.items():
-                if key in p.text:
-                    p.text = p.text.replace(key, format_as_clean_text(value))
+                if key in p.text: p.text = p.text.replace(key, str(value))
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for p in cell.paragraphs:
                         for key, value in data_dict.items():
-                            if key in p.text:
-                                p.text = p.text.replace(key, format_as_clean_text(value))
+                            if key in p.text: p.text = p.text.replace(key, str(value))
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
@@ -67,27 +58,25 @@ def fill_cv_docx(template, data_dict):
     except: return None
 
 # --- APP FLOW ---
-st.title("📊 CV-Builder Pro & Match Analyst")
-st.markdown("---")
+st.markdown("<h1>✍️ CV-Builder: Professionel Brødtekst</h1>", unsafe_allow_html=True)
 
 if 'cv_step' not in st.session_state: st.session_state.cv_step = 1
 
 if st.session_state.cv_step == 1:
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2, gap="large")
     with col1:
-        st.header("1. Dine Filer")
-        master_cv = st.file_uploader("Upload dit Master-CV (PDF)", type="pdf")
-        cv_template = st.file_uploader("Upload din Word-skabelon (DOCX)", type="docx")
-        navn = st.text_input("Dit fulde navn:", placeholder="Navn Navnesen")
-    
+        st.subheader("📁 Upload dokumenter")
+        master_cv = st.file_uploader("Dit Master-CV (PDF)", type="pdf")
+        cv_template = st.file_uploader("Din Word-skabelon (DOCX)", type="docx")
+        navn = st.text_input("Fulde navn:")
     with col2:
-        st.header("2. Jobannoncen")
-        job_url = st.text_input("Link til jobopslag:")
-        if st.button("Hent jobtekst 🌐") and job_url:
+        st.subheader("🎯 Jobmål")
+        job_url = st.text_input("Link til opslag:")
+        if st.button("Hent tekst 🌐") and job_url:
             st.session_state.temp_job_text = get_text_from_url(job_url)
-        job_text = st.text_area("Jobtekst:", value=st.session_state.get('temp_job_text', ""), height=350)
+        job_text = st.text_area("Jobbeskrivelse:", value=st.session_state.get('temp_job_text', ""), height=250)
 
-    if st.button("Start Match-Analyse & Generering ✨", disabled=not (master_cv and job_text), type="primary"):
+    if st.button("Analyser & Skriv CV ✨", type="primary"):
         st.session_state.master_cv_text = extract_pdf(master_cv)
         st.session_state.job_content = job_text
         st.session_state.cv_template = cv_template
@@ -96,28 +85,25 @@ if st.session_state.cv_step == 1:
         st.rerun()
 
 elif st.session_state.cv_step == 2:
-    with st.spinner("AI analyserer match og optimerer dit CV..."):
+    with st.spinner("AI skriver dit CV i flydende brødtekst..."):
         try:
             client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             prompt = f"""
-            Du er en elite-rekrutteringskonsulent og ATS-ekspert.
+            Du er en professionel CV-forfatter. Omskriv Master-CV'et til et målrettet CV i BRØDTEKST.
             
-            OPGAVE:
-            1. Analysér Master-CV mod Jobopslag. Giv en score og vurdering.
-            2. Omskriv CV'et så det er 100% målrettet med fokus på RESULTATER.
-            
-            Svar KUN i JSON format. Alle felter (pånær score) skal være rene TEXT STRINGS.
-            Brug punkttegn (•) og linjeskift (\\n) for struktur. Ingen klammer [].
+            KRAV TIL FORMULERING:
+            1. Erhvervserfaring: Skriv hvert job som et sammenhængende afsnit (ikke bullets). Beskriv ansvar og integrér resultater (tal/succeser) flydende i teksten. 
+            2. Uddannelse: Beskriv hver uddannelse i brødtekst med fokus på relevante fag eller specialiseringer for dette job.
+            3. Profil: En stærk, narrativ indledning.
+            4. Sprog: Skal være professionelt og matche terminologien i jobopslaget.
 
-            STRUKTUR:
-            - 'analyse': {{ 'score': int, 'styrker': str, 'mangler': str, 'sandsynlighed': str }}
-            - 'kontakt': str (tlf, mail, linkedin)
-            - 'profil': str (fængende indledning)
-            - 'erfaring': str (titel, sted, år + resultatorienterede bullets)
-            - 'uddannelse': str (år, titel, sted)
-            - 'kurser': str
-            - 'sprog': str
-            - 'kompetencer': str (de 10 vigtigste ord)
+            SVAR KUN I JSON FORMAT:
+            - 'analyse': {{ 'score': int, 'vurdering': str, 'sandsynlighed': str }}
+            - 'kontakt': str
+            - 'profil': str
+            - 'erfaring': str (Brødtekst-afsnit pr. job)
+            - 'uddannelse': str (Brødtekst-afsnit pr. uddannelse)
+            - 'kompetencer': str (10 vigtigste ord adskilt af komma)
 
             DATA:
             JOB: {st.session_state.job_content}
@@ -132,45 +118,25 @@ elif st.session_state.cv_step == 2:
             res = json.loads(resp.choices[0].message.content)
             ana = res.get('analyse', {})
 
-            # --- VIS ANALYSE ---
-            st.header("🎯 Match-Analyse")
-            c1, c2, c3 = st.columns([1, 1, 2])
-            with c1:
-                st.metric("Match Score", f"{ana.get('score')}%")
-            with c2:
-                st.metric("Sandsynlighed for samtale", ana.get('sandsynlighed'))
-            with c3:
-                st.progress(ana.get('score', 0) / 100)
-                st.write(f"**Vurdering:** {ana.get('sandsynlighed')}")
+            # --- VISNING ---
+            st.markdown("<div class='analyse-card'>", unsafe_allow_html=True)
+            st.subheader(f"🎯 Match Score: {ana.get('score')}%")
+            st.write(f"**Vurdering:** {ana.get('vurdering')}")
+            st.write(f"**Chancer for samtale:** {ana.get('sandsynlighed')}")
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            with st.container(border=True):
-                st.write(f"✅ **Dine største styrker:** {ana.get('styrker')}")
-                st.write(f"⚠️ **Her skal du være opmærksom (mangler):** {ana.get('mangler')}")
-
-            st.divider()
-
-            # --- VIS FLOT PRÆSENTATION ---
-            st.header("📄 Forhåndsvisning af dit optimerede CV")
+            # Forhåndsvisning
+            st.markdown(f"<div class='cv-block'><h1>{st.session_state.user_name}</h1>{res.get('kontakt')}</div>", unsafe_allow_html=True)
             
-            with st.container(border=True):
-                st.title(st.session_state.user_name if st.session_state.user_name else "Dit Navn")
-                st.caption(res.get('kontakt'))
-                
-                col_left, col_right = st.columns([2, 1])
-                with col_left:
-                    st.markdown("#### Profil")
-                    st.write(res.get('profil'))
-                    st.markdown("#### Erhvervserfaring")
-                    st.text(res.get('erfaring'))
-                with col_right:
-                    st.markdown("#### Kernekompetencer")
-                    st.info(res.get('kompetencer'))
-                    st.markdown("#### Uddannelse")
-                    st.text(res.get('uddannelse'))
-                    st.markdown("#### Sprog")
-                    st.write(res.get('sprog'))
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                st.markdown("<div class='cv-block'><div class='cv-section-title'>Profil</div>" + res.get('profil') + "</div>", unsafe_allow_html=True)
+                st.markdown("<div class='cv-block'><div class='cv-section-title'>Erhvervserfaring</div>" + res.get('erfaring') + "</div>", unsafe_allow_html=True)
+            with c2:
+                st.markdown("<div class='cv-block'><div class='cv-section-title'>Uddannelse</div>" + res.get('uddannelse') + "</div>", unsafe_allow_html=True)
+                st.markdown("<div class='cv-block'><div class='cv-section-title'>Kompetencer</div>" + res.get('kompetencer') + "</div>", unsafe_allow_html=True)
 
-            # --- DOWNLOAD ---
+            # Download
             if st.session_state.cv_template:
                 replacements = {
                     "{{NAVN}}": st.session_state.user_name,
@@ -178,15 +144,13 @@ elif st.session_state.cv_step == 2:
                     "{{CV_PROFIL}}": res.get('profil', ''),
                     "{{CV_ERFARING}}": res.get('erfaring', ''),
                     "{{CV_UDDANNELSE}}": res.get('uddannelse', ''),
-                    "{{CV_KURSER}}": res.get('kurser', ''),
-                    "{{CV_SPROG}}": res.get('sprog', ''),
                     "{{CV_KOMPETENCER}}": res.get('kompetencer', '')
                 }
-                final_cv = fill_cv_docx(st.session_state.cv_template, replacements)
-                st.download_button("Download dit færdige CV (.docx) 📄", final_cv, f"CV_{st.session_state.user_name}.docx", type="primary", use_container_width=True)
+                final_doc = fill_cv_docx(st.session_state.cv_template, replacements)
+                st.download_button("Hent CV med brødtekst (.docx) 📄", final_doc, f"CV_{st.session_state.user_name}.docx", type="primary")
 
         except Exception as e:
-            st.error(f"Der skete en fejl under genereringen: {e}")
+            st.error(f"Fejl: {e}")
 
     if st.button("Start forfra 🔄"):
         st.session_state.cv_step = 1
